@@ -16,14 +16,14 @@ grimoire --help
 
 | Command | What it does | Example |
 |---|---|---|
-| `list [-c PHASE]` | Tools grouped by phase with installed status (uses `which`, never executes anything). | `grimoire list -c scanning` |
+| `list [-c CATEGORY]` | Tools grouped by category with installed status (uses `which`, never executes anything). | `grimoire list -c web` |
 | `search QUERY` | Fuzzy search over names and descriptions; exits 1 if nothing matches. | `grimoire search subdomain` |
 | `info TOOL` | Curated usage: header, examples, common flags, cheatsheet, then system docs. Typos resolve to the closest tool. | `grimoire info nmap` |
 | `run TOOL [ARGS...]` | Shows the exact command, asks y/N, executes with output streamed, logs it. | `grimoire run nmap -sV 192.0.2.10 --dry-run` |
 | `detect` | Which cataloged tools are installed, with best-effort versions, plus an `N/M installed` summary. | `grimoire detect` |
 | `shell` | REPL with fuzzy autocomplete over commands and tool names, persistent history. `help`, `clear`, `exit`/`quit` are built in; Ctrl-C cancels the line, Ctrl-D exits. | `grimoire shell` |
 
-Phases: `recon`, `scanning`, `exploitation`, `post-exploitation`, `c2`, `exfil`, `reporting`.
+Categories follow Kali's tool groups, listed in rough kill-chain order: `information-gathering`, `vulnerability-analysis`, `web`, `database`, `password-attacks`, `wireless`, `reverse-engineering`, `exploitation`, `sniffing-spoofing`, `post-exploitation`, `forensics`, `social-engineering`, `c2`, `reporting`.
 
 ### The `info` usage engine
 
@@ -59,7 +59,7 @@ One YAML file per category in `catalog/`. Adding a tool is a data change only:
 ```yaml
 tools:
   - name: nmap                  # unique, case-insensitive
-    category: scanning          # a phase from the list above
+    category: information-gathering   # one of the categories above
     binary: nmap                # executable looked up on PATH
     install: sudo apt install nmap
     description: Network discovery and port/service scanner.
@@ -76,7 +76,22 @@ Entries are validated on load; duplicate names are rejected. Set `GRIMOIRE_CATAL
 
 **Interactive tools** (frameworks that are servers or REPLs) are documented by `info` but never wrapped: `grimoire run` refuses them, logs `refused_interactive`, and tells you to launch the binary directly.
 
-**Later phases.** Exploitation, post-exploitation, c2 and exfil entries follow the same rules: they are documentation plus launcher entries, subject to the same scope gating and audit logging as everything else.
+### Curated vs generated entries
+
+The catalog has two tiers:
+
+- `catalog/*.yaml` - **curated**: hand-written, with examples and common flags. These always win.
+- `catalog/generated/*.yaml` - **generated** metadata from Kali's `kali-tools-*` metapackages (name, description, binary, category, install command, homepage). They have no examples or flags; `info` falls back to `tldr`, then `man`, then `--help`. If a generated entry shares a name with a curated one it is skipped. Duplicate names inside a single tier are an error.
+
+Regenerate on a Kali machine (needs `apt-cache`, `dpkg` and PyYAML; not a runtime dependency):
+
+```bash
+python3 scripts/ingest_kali.py        # rewrites catalog/generated/ only; curated files are never touched
+```
+
+The script is metadata only. It never produces examples or attack commands. Frameworks and everything in `c2` are marked `interactive`, and categories that act on targets are marked `requires_auth_scope`; when unsure it defaults to requiring scope. Review the generated YAML before committing it.
+
+Exploitation, post-exploitation and c2 entries follow the same rules as everything else: documentation plus launcher entries, subject to the same scope gating and audit logging.
 
 ## Development
 

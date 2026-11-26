@@ -21,18 +21,34 @@ def default_catalog_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "catalog"
 
 
-def load_catalog(directory: Path | None = None) -> dict[str, Tool]:
-    """Return tools keyed by lowercase name. Raises ValueError on duplicates."""
-    directory = directory or default_catalog_dir()
+def _load_tier(paths: list[Path], source: str) -> dict[str, Tool]:
+    """Load one tier of YAML files. Duplicate names within a tier are an error."""
     tools: dict[str, Tool] = {}
-    for path in sorted(directory.glob("*.yaml")):
+    for path in paths:
         data = yaml.safe_load(path.read_text()) or {}
         for raw in data.get("tools", []):
             tool = Tool.model_validate(raw)
+            if source == "generated":
+                tool = tool.model_copy(update={"source": source})
             key = tool.name.lower()
             if key in tools:
                 raise ValueError(f"duplicate tool {tool.name!r} in {path.name}")
             tools[key] = tool
+    return tools
+
+
+def load_catalog(directory: Path | None = None) -> dict[str, Tool]:
+    """Return tools keyed by lowercase name.
+
+    Two tiers: curated (`<dir>/*.yaml`) and generated (`<dir>/generated/*.yaml`).
+    A curated entry wins over a generated one with the same name; duplicates
+    within a tier raise ValueError.
+    """
+    directory = directory or default_catalog_dir()
+    tools = _load_tier(sorted(directory.glob("*.yaml")), "curated")
+    generated = _load_tier(sorted((directory / "generated").glob("*.yaml")), "generated")
+    for key, tool in generated.items():
+        tools.setdefault(key, tool)
     return tools
 
 

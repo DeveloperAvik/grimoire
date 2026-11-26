@@ -15,7 +15,7 @@ def tools():
 
 def test_loads_and_validates(tools):
     assert "nmap" in tools
-    assert tools["nmap"].category is Phase.SCANNING
+    assert tools["nmap"].category is Phase.INFORMATION_GATHERING
     assert tools["nmap"].examples
 
 
@@ -25,7 +25,7 @@ def test_grouping_in_phase_order(tools):
 
 
 def test_category_filter(tools):
-    assert set(by_phase(tools, Phase.RECON)) == {Phase.RECON}
+    assert set(by_phase(tools, Phase.WEB)) == {Phase.WEB}
 
 
 def test_search_name_and_description(tools):
@@ -34,7 +34,7 @@ def test_search_name_and_description(tools):
 
 
 def test_duplicate_detection(tmp_path):
-    entry = "tools:\n  - {name: x, category: recon, binary: x, description: d}\n"
+    entry = "tools:\n  - {name: x, category: web, binary: x, description: d}\n"
     (tmp_path / "a.yaml").write_text(entry)
     (tmp_path / "b.yaml").write_text(entry)
     with pytest.raises(ValueError):

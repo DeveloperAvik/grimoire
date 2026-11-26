@@ -8,14 +8,21 @@ from pydantic import BaseModel, Field
 
 
 class Phase(str, Enum):
-    """Kill-chain phases, in display order."""
+    """Kali's tool categories, in rough kill-chain display order."""
 
-    RECON = "recon"
-    SCANNING = "scanning"
+    INFORMATION_GATHERING = "information-gathering"
+    VULNERABILITY_ANALYSIS = "vulnerability-analysis"
+    WEB = "web"
+    DATABASE = "database"
+    PASSWORD_ATTACKS = "password-attacks"
+    WIRELESS = "wireless"
+    REVERSE_ENGINEERING = "reverse-engineering"
     EXPLOITATION = "exploitation"
+    SNIFFING_SPOOFING = "sniffing-spoofing"
     POST_EXPLOITATION = "post-exploitation"
+    FORENSICS = "forensics"
+    SOCIAL_ENGINEERING = "social-engineering"
     C2 = "c2"
-    EXFIL = "exfil"
     REPORTING = "reporting"
 
 
@@ -38,3 +45,4 @@ class Tool(BaseModel):
     cheatsheet_url: str | None = None
     interactive: bool = False
     requires_auth_scope: bool = False
+    source: str = "curated"  # "generated" for entries produced by scripts/ingest_kali.py

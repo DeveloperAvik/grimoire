@@ -1,24 +1,6 @@
 tools:
-  - name: nmap
-    category: scanning
-    binary: nmap
-    install: sudo apt install nmap
-    description: Network discovery and port/service scanner.
-    common_flags:
-      -sV: Probe open ports for service/version info
-      -sC: Run default NSE scripts
-      -p-: Scan all 65535 ports
-      -Pn: Skip host discovery
-      -oA <base>: Save output in all formats
-      -T4: Faster timing template
-    examples:
-      - {cmd: "nmap -sV -sC -oA scan 192.0.2.10", desc: "Service and default-script scan of one host"}
-      - {cmd: "nmap -p- --min-rate 1000 192.0.2.10", desc: "Full TCP port sweep"}
-    cheatsheet_url: https://nmap.org/book/man.html
-    requires_auth_scope: true
-
   - name: nikto
-    category: scanning
+    category: web
     binary: nikto
     install: sudo apt install nikto
     description: Web server scanner for outdated software and common misconfigurations.
@@ -31,7 +13,7 @@ tools:
     requires_auth_scope: true
 
   - name: gobuster
-    category: scanning
+    category: web
     binary: gobuster
     install: sudo apt install gobuster
     description: Directory, DNS and vhost discovery by wordlist.
@@ -45,7 +27,7 @@ tools:
     requires_auth_scope: true
 
   - name: ffuf
-    category: scanning
+    category: web
     binary: ffuf
     install: sudo apt install ffuf
     description: Fast web fuzzer for content and parameter discovery.

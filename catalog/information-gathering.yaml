@@ -1,6 +1,6 @@
 tools:
   - name: whois
-    category: recon
+    category: information-gathering
     binary: whois
     install: sudo apt install whois
     description: Query registration data for a domain or IP block.
@@ -11,7 +11,7 @@ tools:
     requires_auth_scope: false
 
   - name: dnsrecon
-    category: recon
+    category: information-gathering
     binary: dnsrecon
     install: sudo apt install dnsrecon
     description: DNS enumeration - record lookups, zone transfer checks, brute force.
@@ -24,7 +24,7 @@ tools:
     requires_auth_scope: true
 
   - name: theharvester
-    category: recon
+    category: information-gathering
     binary: theHarvester
     install: sudo apt install theharvester
     description: Gather emails, subdomains and hostnames from public sources (OSINT).
@@ -35,3 +35,21 @@ tools:
     examples:
       - {cmd: "theHarvester -d example.com -b crtsh", desc: "Subdomains from certificate transparency"}
     requires_auth_scope: false
+
+  - name: nmap
+    category: information-gathering
+    binary: nmap
+    install: sudo apt install nmap
+    description: Network discovery and port/service scanner.
+    common_flags:
+      -sV: Probe open ports for service/version info
+      -sC: Run default NSE scripts
+      -p-: Scan all 65535 ports
+      -Pn: Skip host discovery
+      -oA <base>: Save output in all formats
+      -T4: Faster timing template
+    examples:
+      - {cmd: "nmap -sV -sC -oA scan 192.0.2.10", desc: "Service and default-script scan of one host"}
+      - {cmd: "nmap -p- --min-rate 1000 192.0.2.10", desc: "Full TCP port sweep"}
+    cheatsheet_url: https://nmap.org/book/man.html
+    requires_auth_scope: true

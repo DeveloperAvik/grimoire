@@ -156,6 +156,8 @@ def info(tool_name: str = typer.Argument(..., help="Tool name (typos are fuzzy-m
     ]
     if not installed and tool.install:
         head.append(f"Install: [bold]{escape(tool.install)}[/]")
+    if tool.source == "generated":
+        head.append("[dim]Generated metadata entry: no curated examples, see system docs below.[/]")
     if tool.requires_auth_scope:
         head.append("[yellow]Requires written authorization / defined scope.[/]")
     if tool.interactive:
