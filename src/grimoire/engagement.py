@@ -44,6 +44,11 @@ def _read_json(path: Path) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def history_path() -> Path:
+    """REPL history file. Distinctive name so it can be gitignored precisely; may contain typed targets."""
+    return base_dir() / "shell_history"
+
+
 def has_accepted() -> bool:
     data = _read_json(base_dir() / "accepted.json")
     return bool(data and data.get("accepted") is True)

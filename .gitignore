@@ -10,3 +10,4 @@ dist/
 accepted.json
 scope.json
 audit.jsonl
+shell_history

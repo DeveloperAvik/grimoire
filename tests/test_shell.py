@@ -107,3 +107,9 @@ def test_read_only_commands_write_no_audit_line(cmd, tmp_path):
     for line in ("list", "info nmap", "search whois", "help"):
         cli.dispatch_line(cmd, line)
     assert audit(tmp_path) == []
+
+
+def test_history_file_name_and_location(tmp_path):
+    path = engagement.history_path()
+    assert path.name == "shell_history"
+    assert path.parent == tmp_path / "home"

@@ -424,10 +424,10 @@ def shell() -> None:
     from prompt_toolkit.history import FileHistory
 
     cmd = typer.main.get_command(app)
-    history_path = engagement.base_dir() / "history"
-    history_path.touch(mode=0o600, exist_ok=True)
-    history_path.chmod(0o600)
-    session = PromptSession(history=FileHistory(str(history_path)), completer=_build_completer())
+    hist = engagement.history_path()
+    hist.touch(mode=0o600, exist_ok=True)
+    hist.chmod(0o600)
+    session = PromptSession(history=FileHistory(str(hist)), completer=_build_completer())
 
     console.print("Type help for commands, exit to quit.")
     while True:

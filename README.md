@@ -41,7 +41,7 @@ Categories follow Kali's tool groups, listed in rough kill-chain order: `informa
 - **Confirm before executing.** `run` prints the exact command and asks y/N. `--dry-run` shows and logs the command without executing it. `-y` skips only the y/N.
 - **Audit log.** Every `run` attempt appends one JSON line to `audit.jsonl`: `ts`, `tool`, `binary`, `argv`, `cwd`, `scope_ref`, `dry_run`, `outcome`, `exit_code`. Outcomes: `executed`, `dry_run`, `aborted`, `refused_interactive`, `not_found`, `not_installed`, `launch_failed`, `banner_declined`, `scope_missing`, and (shell only) `bad_input` for unparseable or malformed lines. Every `run` attempt, however it ends, writes exactly one line; fields that are unknown at that point are `null`. Other shell commands (`list`, `info`, ...) are read-only and are not audited.
 - **No shell, ever.** Commands run as argument lists, never through a shell.
-- **Where state lives.** `$GRIMOIRE_HOME` if set, otherwise the platform config dir (`~/.config/grimoire` on Linux). Files: `accepted.json`, `scope.json`, `audit.jsonl`, `history`. All are created with mode `0600`.
+- **Where state lives.** `$GRIMOIRE_HOME` if set, otherwise the platform config dir (`~/.config/grimoire` on Linux). Files: `accepted.json`, `scope.json`, `audit.jsonl`, `shell_history`. All are created with mode `0600`.
 
 ### Passing flags through
 
