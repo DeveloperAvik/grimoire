@@ -22,6 +22,7 @@ $ grimoire shell
 - [Quick start](#quick-start)
 - [Commands](#commands)
 - [How `info` works](#how-info-works)
+- [Updating](#updating)
 - [Safety and legal](#safety-and-legal)
 - [Audit log](#audit-log)
 - [Where state lives](#where-state-lives)
@@ -88,6 +89,9 @@ The first time you use `run` you will be shown a legal notice and asked to type 
 | [`run`](#run) | Show the exact command, confirm, execute, log |
 | [`detect`](#detect) | Installed/missing report with versions |
 | [`shell`](#shell) | Interactive REPL |
+| [`update`](#updating) | Fast-forward a git-checkout install from origin |
+
+Root flags: `--version` prints the installed version; `--update` is an alias for `grimoire update`.
 
 ### list
 
@@ -183,6 +187,30 @@ The usage engine prefers curated knowledge and only then falls back to what the 
 | 4 | `<binary> --help` | Only if the tool is installed |
 
 All subprocess calls use argument lists (never a shell), capture output, and time out after 10 seconds. Generated catalog entries have no curated examples, so for them the system docs are the content.
+
+## Updating
+
+```bash
+grimoire update            # fast-forward this checkout to the latest origin commit
+grimoire update --check    # report whether an update is available; do not pull
+grimoire --update          # same as `grimoire update`
+grimoire --version         # print the installed version
+```
+
+`update` works for **git-checkout installs only** (the `git clone` + `pip install -e .` route). It locates the checkout by walking up from the installed package to the first directory containing `.git`. If there is none (for example a plain `pip install`), it says so, explains how to upgrade from your source, and exits 0.
+
+What it does, in order:
+
+1. **Refuses on a dirty tree.** Any uncommitted change, including untracked files such as a not-yet-committed `catalog/generated/`, stops the update and lists the paths. Commit, stash (`git stash -u`) or revert, then run it again. It never pulls over local edits. (`--check` does not refuse; it warns instead.)
+2. Notes the current branch. If it is not `main` it warns and updates that branch. A detached HEAD is refused.
+3. `git fetch origin`, then counts how far `HEAD` is behind `origin/<branch>`. If zero, it prints "Already up to date."
+4. Shows the incoming commits, then runs `git pull --ff-only origin <branch>`. **It only fast-forwards.** If your history has diverged it stops and tells you to resolve it yourself; it never merges, rebases or resets.
+5. Reinstalls **only if `pyproject.toml` changed** in the pulled range, using the interpreter grimoire is running under (`<that python> -m pip install -e <repo>`, never a bare `python` or `pip` from `PATH`). Editable installs pick up code and catalog changes with no reinstall.
+6. Prints `old -> new` short SHAs. If you ran it inside `grimoire shell`, it also reminds you to restart the shell, since modules already imported by the running process are not reloaded.
+
+Network operations have a generous timeout, and a missing remote, no network or a missing `git` produce a clean message, not a traceback. Everything is run with `git -C <repo>` using argument lists, never a shell.
+
+**For maintainers:** pushing to `main` is the release; users running `grimoire update` get it. Tagging releases is optional. `--version` reads the package metadata (the `version` in `pyproject.toml`), which refreshes whenever `pyproject.toml` changes and triggers the reinstall, so bump it if you want the update to be visible in `--version`.
 
 ## Safety and legal
 
@@ -424,7 +452,8 @@ grimoire/
 │   ├── models.py             # Tool/Example models, category validation and ordering
 │   ├── catalog.py            # YAML loading, tier precedence, cache, grouping, fuzzy search
 │   ├── engagement.py         # state dir, banner acceptance, scope, audit log, history path
-│   └── cli.py                # Typer app: list/search/info/run/detect/shell
+│   ├── updater.py            # `grimoire update`: dirty-tree guard, fetch, ff-only pull
+│   └── cli.py                # Typer app: list/search/info/run/detect/shell/update
 └── tests/                    # pytest suite (no real tools or apt involved)
 ```
 
@@ -435,7 +464,7 @@ pip install -e '.[dev]'
 pytest
 ```
 
-The tests never execute real external binaries and never call `apt` or `dpkg`: `shutil.which` and `subprocess.run` are patched (a fixture makes any unpatched `subprocess.run` fail the test), `GRIMOIRE_HOME` points at a temp directory, and the ingest script is tested through its pure transform functions and a fixture-driven discovery reader. Areas covered: catalog loading, validation, ordering and fuzzy search; tier precedence and the loader cache; every CLI command; the banner, scope, dry-run, confirmation and audit behaviour of `run` (one line per attempt, with the full field set); the shell's dispatch and resilience; and ingest discovery, classification and the write guard.
+The tests never execute real external binaries and never call `apt` or `dpkg`: `shutil.which` and `subprocess.run` are patched (a fixture makes any unpatched `subprocess.run` fail the test), `GRIMOIRE_HOME` points at a temp directory, and the ingest script is tested through its pure transform functions and a fixture-driven discovery reader. Areas covered: catalog loading, validation, ordering and fuzzy search; tier precedence and the loader cache; every CLI command; the updater (pure logic plus an injected fake runner, and no real git or network); the banner, scope, dry-run, confirmation and audit behaviour of `run` (one line per attempt, with the full field set); the shell's dispatch and resilience; and ingest discovery, classification and the write guard.
 
 Conventions:
 

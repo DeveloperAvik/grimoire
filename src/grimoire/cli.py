@@ -7,6 +7,7 @@ import re
 import shlex
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Any, Optional
 
 import typer
@@ -15,7 +16,7 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
-from . import catalog, engagement
+from . import __version__, catalog, engagement, updater
 from .models import KNOWN_CATEGORY_ORDER, Tool
 
 app = typer.Typer(
@@ -24,6 +25,38 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        console.print(f"grimoire {__version__}", highlight=False)
+        raise typer.Exit()
+
+
+_IN_SHELL = False  # set by `shell` so `update` can tell the user to restart after a pull
+
+
+def _do_update(check: bool) -> int:
+    return updater.run_update(
+        updater.subprocess_runner,
+        updater.find_repo_root(Path(__file__)),
+        check,
+        lambda msg: console.print(msg, markup=False, highlight=False),
+        in_shell=_IN_SHELL,
+    )
+
+
+def _update_callback(value: bool) -> None:
+    if value:
+        raise typer.Exit(_do_update(check=False))
+
+
+@app.callback()
+def root(
+    version: bool = typer.Option(False, "--version", callback=_version_callback, is_eager=True, help="Show the version and exit."),
+    update: bool = typer.Option(False, "--update", callback=_update_callback, is_eager=True, help="Update this git-checkout install (same as `grimoire update`)."),
+) -> None:
+    """Catalog, document and launch security tools installed on this host."""
 
 _OVERSTRIKE = re.compile(r".\x08")
 DOC_LINES = 40
@@ -102,7 +135,7 @@ def _version(tool: Tool) -> str:
 def list_tools(
     category: Optional[str] = typer.Option(None, "--category", "-c", help="Only show this category."),
 ) -> None:
-    """List cataloged tools grouped by kill-chain phase."""
+    """List cataloged tools grouped by category."""
     tools = _load()
     groups = catalog.by_phase(tools, category)
     if not groups:
@@ -333,6 +366,14 @@ def run(
 
 
 @app.command()
+def update(
+    check: bool = typer.Option(False, "--check", help="Only report whether an update is available; do not pull."),
+) -> None:
+    """Update a git-checkout install by fast-forwarding; refuses on a dirty tree."""
+    raise typer.Exit(_do_update(check))
+
+
+@app.command()
 def detect() -> None:
     """Report which cataloged tools are installed, with versions."""
     tools = _load()
@@ -361,6 +402,7 @@ SHELL_HELP = """[bold]Commands[/]
   info TOOL            curated usage + system docs
   run TOOL [ARGS]      show command, confirm, execute (use --dry-run to preview)
   detect               installed tools and versions
+  update [--check]     fast-forward this git checkout from origin
   help | clear | exit  shell meta commands"""
 
 
@@ -414,6 +456,7 @@ def _build_completer():
         "list": None,
         "search": None,
         "detect": None,
+        "update": None,
         "help": None,
         "clear": None,
         "exit": None,
@@ -434,16 +477,21 @@ def shell() -> None:
     hist.chmod(0o600)
     session = PromptSession(history=FileHistory(str(hist)), completer=_build_completer())
 
+    global _IN_SHELL
     console.print("Type help for commands, exit to quit.")
-    while True:
-        try:
-            line = session.prompt("grimoire> ")
-        except KeyboardInterrupt:
-            continue  # cancel the current line
-        except EOFError:
-            break  # Ctrl-D
-        if not dispatch_line(cmd, line):
-            break
+    _IN_SHELL = True
+    try:
+        while True:
+            try:
+                line = session.prompt("grimoire> ")
+            except KeyboardInterrupt:
+                continue  # cancel the current line
+            except EOFError:
+                break  # Ctrl-D
+            if not dispatch_line(cmd, line):
+                break
+    finally:
+        _IN_SHELL = False
 
 
 if __name__ == "__main__":
