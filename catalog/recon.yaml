@@ -1,0 +1,37 @@
+tools:
+  - name: whois
+    category: recon
+    binary: whois
+    install: sudo apt install whois
+    description: Query registration data for a domain or IP block.
+    common_flags:
+      -h <host>: Query a specific whois server
+    examples:
+      - {cmd: "whois example.com", desc: "Registrar and nameserver info for a domain"}
+    requires_auth_scope: false
+
+  - name: dnsrecon
+    category: recon
+    binary: dnsrecon
+    install: sudo apt install dnsrecon
+    description: DNS enumeration - record lookups, zone transfer checks, brute force.
+    common_flags:
+      -d: Target domain
+      -t: "Enumeration type (std, brt, axfr, ...)"
+      -D: Wordlist for brute force
+    examples:
+      - {cmd: "dnsrecon -d example.com -t std", desc: "Standard record enumeration"}
+    requires_auth_scope: true
+
+  - name: theharvester
+    category: recon
+    binary: theHarvester
+    install: sudo apt install theharvester
+    description: Gather emails, subdomains and hostnames from public sources (OSINT).
+    common_flags:
+      -d: Target domain
+      -b: "Data source (e.g. crtsh, duckduckgo)"
+      -l: Limit number of results
+    examples:
+      - {cmd: "theHarvester -d example.com -b crtsh", desc: "Subdomains from certificate transparency"}
+    requires_auth_scope: false

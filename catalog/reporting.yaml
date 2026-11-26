@@ -1,0 +1,22 @@
+tools:
+  - name: cherrytree
+    category: reporting
+    binary: cherrytree
+    install: sudo apt install cherrytree
+    description: Hierarchical note-taking app, commonly used to keep engagement notes and findings.
+    examples:
+      - {cmd: "cherrytree notes.ctb", desc: "Open an engagement notes file"}
+    requires_auth_scope: false
+
+  - name: eyewitness
+    category: reporting
+    binary: eyewitness
+    install: sudo apt install eyewitness
+    description: Capture screenshots of web services for evidence and reporting.
+    common_flags:
+      --web: Treat input as web URLs
+      -f: File of targets
+      -d: Output directory
+    examples:
+      - {cmd: "eyewitness --web -f urls.txt -d shots", desc: "Screenshot a list of in-scope URLs"}
+    requires_auth_scope: true

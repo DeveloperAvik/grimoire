@@ -1,0 +1,59 @@
+tools:
+  - name: nmap
+    category: scanning
+    binary: nmap
+    install: sudo apt install nmap
+    description: Network discovery and port/service scanner.
+    common_flags:
+      -sV: Probe open ports for service/version info
+      -sC: Run default NSE scripts
+      -p-: Scan all 65535 ports
+      -Pn: Skip host discovery
+      -oA <base>: Save output in all formats
+      -T4: Faster timing template
+    examples:
+      - {cmd: "nmap -sV -sC -oA scan 192.0.2.10", desc: "Service and default-script scan of one host"}
+      - {cmd: "nmap -p- --min-rate 1000 192.0.2.10", desc: "Full TCP port sweep"}
+    cheatsheet_url: https://nmap.org/book/man.html
+    requires_auth_scope: true
+
+  - name: nikto
+    category: scanning
+    binary: nikto
+    install: sudo apt install nikto
+    description: Web server scanner for outdated software and common misconfigurations.
+    common_flags:
+      -h: Target host or URL
+      -p: Port(s)
+      -o: Output file
+    examples:
+      - {cmd: "nikto -h http://example.com", desc: "Baseline web server scan"}
+    requires_auth_scope: true
+
+  - name: gobuster
+    category: scanning
+    binary: gobuster
+    install: sudo apt install gobuster
+    description: Directory, DNS and vhost discovery by wordlist.
+    common_flags:
+      dir: Directory/file mode
+      -u: Target URL
+      -w: Wordlist
+      -x: File extensions to try
+    examples:
+      - {cmd: "gobuster dir -u http://example.com -w /usr/share/wordlists/dirb/common.txt", desc: "Directory discovery"}
+    requires_auth_scope: true
+
+  - name: ffuf
+    category: scanning
+    binary: ffuf
+    install: sudo apt install ffuf
+    description: Fast web fuzzer for content and parameter discovery.
+    common_flags:
+      -u: "URL containing the FUZZ keyword"
+      -w: Wordlist
+      -mc: Match HTTP status codes
+      -fs: Filter by response size
+    examples:
+      - {cmd: "ffuf -u http://example.com/FUZZ -w /usr/share/wordlists/dirb/common.txt", desc: "Content discovery"}
+    requires_auth_scope: true
