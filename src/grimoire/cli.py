@@ -395,15 +395,84 @@ def detect() -> None:
 # --------------------------------------------------------------------------
 # interactive shell
 # --------------------------------------------------------------------------
-META = ("help", "clear", "exit", "quit")
+META = ("help", "clear", "exit", "quit", "history")
 SHELL_HELP = """[bold]Commands[/]
-  list [-c PHASE]      tools by phase with install status
+  list [-c CATEGORY]   tools by category with install status
   search QUERY         fuzzy search
-  info TOOL            curated usage + system docs
+  info TOOL            curated usage + system docs (a bare tool name works too)
   run TOOL [ARGS]      show command, confirm, execute (use --dry-run to preview)
   detect               installed tools and versions
   update [--check]     fast-forward this git checkout from origin
-  help | clear | exit  shell meta commands"""
+  history              last 20 commands from this machine's shell history
+  help | clear | exit  shell meta commands  (Ctrl-L also clears the screen)"""
+
+TOOLBAR_TARGETS_MAX = 50
+HISTORY_SHOWN = 20
+
+
+# ---- pure helpers (unit-tested; no terminal needed) ---------------------------------
+def prompt_fragments(scope: dict | None) -> list[tuple[str, str]]:
+    """Prompt as prompt_toolkit style fragments: `grimoire ❯ ` or `grimoire[<ref>] ❯ `."""
+    parts = [("class:prompt", "grimoire")]
+    if scope:
+        parts.append(("class:scope", f"[{scope['authorization_ref']}]"))
+    parts.append(("class:arrow", " ❯ "))
+    return parts
+
+
+def toolbar_text(scope: dict | None, total: int, installed: int) -> str:
+    """Bottom toolbar text. Pure function of (scope, total, installed)."""
+    if scope:
+        targets = scope["targets"]
+        if len(targets) > TOOLBAR_TARGETS_MAX:
+            targets = targets[: TOOLBAR_TARGETS_MAX - 1] + "…"
+        scope_part = f"scope: {scope['authorization_ref']} → {targets}"
+    else:
+        scope_part = "no scope set"
+    return f" {scope_part}  │  {total} tools  │  {installed} installed "
+
+
+def welcome_lines(version: str, total: int, installed: int, scope: dict | None) -> list[str]:
+    scope_line = f"scope: {scope['authorization_ref']} → {scope['targets']}" if scope else "no scope set"
+    return [f"grimoire {version}", f"{total} tools · {installed} installed", scope_line]
+
+
+def history_entries(path: Path) -> list[str]:
+    """Commands from a prompt_toolkit FileHistory file ('# timestamp' then '+line' rows)."""
+    try:
+        text = path.read_text(errors="replace")
+    except OSError:
+        return []
+    entries: list[str] = []
+    current: list[str] | None = None
+    for line in text.splitlines():
+        if line.startswith("#"):  # a new entry begins
+            if current:
+                entries.append("\n".join(current))
+            current = []
+        elif line.startswith("+"):
+            if current is None:
+                current = []
+            current.append(line[1:])
+    if current:
+        entries.append("\n".join(current))
+    return entries
+
+
+def history_view(path: Path, count: int = HISTORY_SHOWN) -> list[tuple[int, str]]:
+    """The last `count` commands as (absolute position, command)."""
+    entries = history_entries(path)
+    start = max(0, len(entries) - count)
+    return [(start + i + 1, e.replace("\n", " ")) for i, e in enumerate(entries[start:])]
+
+
+def _install_status(tools: dict[str, Tool]) -> dict[str, bool]:
+    """One which() pass over the catalog. Called once at shell startup, never per render."""
+    return {name: _installed(tool) for name, tool in tools.items()}
+
+
+def _known_commands(cmd: Any) -> set[str]:
+    return set(getattr(cmd, "commands", {}) or {}) | set(META) | {"shell"}
 
 
 def dispatch_line(cmd: Any, line: str) -> bool:
@@ -428,9 +497,26 @@ def dispatch_line(cmd: Any, line: str) -> bool:
     if head == "clear":
         console.clear()
         return True
+    if head == "history":
+        rows = history_view(engagement.history_path())
+        if not rows:
+            console.print("[dim]No history yet.[/]")
+        for number, text in rows:
+            console.print(f"{number:>5}  {text}", markup=False, highlight=False)
+        return True
     if head == "shell":
         console.print("[yellow]Already in the shell.[/]")
         return True
+    if head not in _known_commands(cmd):
+        # bare tool name -> `info <tool>` (read-only, not audited)
+        try:
+            is_tool = head in _load()
+        except (typer.Exit, Exception):
+            is_tool = False
+        if is_tool and len(argv) == 1:
+            argv = ["info", argv[0]]
+        elif is_tool:
+            console.print(f"[dim]Tip: `info {escape(head)}` shows usage; `run {escape(head)} ...` executes it.[/]")
     try:
         cmd.main(args=argv, prog_name="grimoire", standalone_mode=False)
     except (typer.Exit, SystemExit):
@@ -446,17 +532,35 @@ def dispatch_line(cmd: Any, line: str) -> bool:
     return True
 
 
-def _build_completer():
-    from prompt_toolkit.completion import FuzzyCompleter, NestedCompleter
+def _build_completer(tools: dict[str, Tool] | None = None, status: dict[str, bool] | None = None):
+    """Fuzzy completer. Tool names carry `<category> · installed|missing`; `list -c` completes categories."""
+    from prompt_toolkit.completion import FuzzyCompleter, NestedCompleter, WordCompleter
 
-    names = {n: None for n in _load()}
+    from .models import category_sort_key
+
+    tools = tools if tools is not None else _load()
+    status = status if status is not None else _install_status(tools)
+    meta = {
+        t.name: f"{t.category} · {'installed' if status.get(key) else 'missing'}"
+        for key, t in tools.items()
+    }
+    names = WordCompleter(sorted(meta), meta_dict=meta, ignore_case=True)
+
+    counts: dict[str, int] = {}
+    for t in tools.values():
+        counts[t.category] = counts.get(t.category, 0) + 1
+    cats = sorted(set(KNOWN_CATEGORY_ORDER) | set(counts), key=category_sort_key)
+    cat_meta = {c: f"{counts.get(c, 0)} tools" for c in cats}
+    categories = WordCompleter(cats, meta_dict=cat_meta, ignore_case=True)
+
     tree = {
         "info": names,
         "run": names,
-        "list": None,
+        "list": {"-c": categories, "--category": categories},
         "search": None,
         "detect": None,
         "update": None,
+        "history": None,
         "help": None,
         "clear": None,
         "exit": None,
@@ -465,25 +569,65 @@ def _build_completer():
     return FuzzyCompleter(NestedCompleter.from_nested_dict(tree))
 
 
+def _build_key_bindings():
+    from prompt_toolkit.key_binding import KeyBindings
+
+    kb = KeyBindings()
+
+    @kb.add("c-l")
+    def _clear_screen(event) -> None:
+        event.app.renderer.clear()  # redraws the prompt; the loop keeps running
+
+    return kb
+
+
+def _print_welcome(total: int, installed: int, scope: dict | None) -> None:
+    from rich.box import ROUNDED
+    from rich.text import Text
+
+    title, counts, scope_line = welcome_lines(__version__, total, installed, scope)
+    body = Text()
+    body.append(counts + "\n", style="bold")
+    body.append(scope_line, style="yellow" if scope else "dim")
+    console.print(Panel(body, title=f"[bold cyan]{escape(title)}[/]", box=ROUNDED, expand=False, padding=(0, 2)))
+    console.print("Type help for commands, exit to quit.")
+
+
 @app.command()
 def shell() -> None:
     """Interactive REPL with tool-name autocomplete."""
     from prompt_toolkit import PromptSession
+    from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
     from prompt_toolkit.history import FileHistory
+    from prompt_toolkit.styles import Style
 
     cmd = typer.main.get_command(app)
     hist = engagement.history_path()
     hist.touch(mode=0o600, exist_ok=True)
     hist.chmod(0o600)
-    session = PromptSession(history=FileHistory(str(hist)), completer=_build_completer())
+
+    tools = _load()  # cached
+    status = _install_status(tools)  # the only which() pass for this session
+    total, installed = len(tools), sum(status.values())
+    session = PromptSession(
+        history=FileHistory(str(hist)),
+        completer=_build_completer(tools, status),
+        auto_suggest=AutoSuggestFromHistory(),
+        key_bindings=_build_key_bindings(),
+        style=Style.from_dict({"prompt": "ansicyan bold", "scope": "ansiyellow", "arrow": "ansigreen bold"}),
+    )
 
     global _IN_SHELL
-    console.print("Type help for commands, exit to quit.")
+    _print_welcome(total, installed, engagement.load_scope())
     _IN_SHELL = True
     try:
         while True:
+            scope = engagement.load_scope()  # re-read per prompt: `run` may have just recorded one
             try:
-                line = session.prompt("grimoire> ")
+                line = session.prompt(
+                    prompt_fragments(scope),
+                    bottom_toolbar=[("", toolbar_text(scope, total, installed))],
+                )
             except KeyboardInterrupt:
                 continue  # cancel the current line
             except EOFError:

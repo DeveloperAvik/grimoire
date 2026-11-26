@@ -162,18 +162,35 @@ grimoire shell
 ```
 
 ```
+╭────────────── grimoire 0.1.0 ──────────────╮
+│  719 tools · 143 installed                 │
+│  scope: ACME-42 → 192.0.2.0/24             │
+╰────────────────────────────────────────────╯
 Type help for commands, exit to quit.
-grimoire> info nm<TAB>
+grimoire[ACME-42] ❯ info nm<TAB>
+ scope: ACME-42 → 192.0.2.0/24  │  719 tools  │  143 installed
 ```
 
-An interactive loop (prompt_toolkit) that runs the same commands: `list`, `search`, `info`, `run`, `detect`, plus `help`, `clear`, `exit`/`quit`.
+An interactive loop (prompt_toolkit) that runs the same commands: `list`, `search`, `info`, `run`, `detect`, `update`, plus the meta commands below.
 
-- **Autocomplete** is fuzzy: `info` and `run` complete tool names; the other commands complete themselves.
+| Feature | Behavior |
+|---|---|
+| **Prompt** | `grimoire ❯ `, or `grimoire[<authorization_ref>] ❯ ` once an engagement scope is recorded. It updates as soon as `run` records a scope. |
+| **Bottom toolbar** | The active scope (reference and targets) or `no scope set`, the total tool count and the installed count. |
+| **Welcome banner** | Version, tool counts and scope on entry, then a hint line. |
+| **Autocomplete** | Fuzzy. `info` and `run` complete tool names with a hint such as `web · installed` or `web · missing`. `list -c <TAB>` completes known categories plus any in your catalog, with tool counts. |
+| **Ghost-text suggestions** | A grey inline suggestion from your history; press Right-arrow or End to accept it. |
+| **Bare tool name** | Typing just `nmap` is the same as `info nmap`. A tool name followed by arguments is not executed; it prints a tip pointing at `run`. |
+| `history` | The last 20 commands from `shell_history`, numbered. Read-only. |
+| `help`, `clear`, `exit` / `quit` | As named. |
+| **Keys** | Tab completes, Up/Down browse history, **Ctrl-L** clears the screen without leaving the loop, **Ctrl-C** cancels the current line, **Ctrl-D** exits. |
+
+Behavior that does not change inside the shell:
+
 - **History** persists in `shell_history` in the state directory (mode `0600`).
-- **Ctrl-C** cancels the current line and keeps going; **Ctrl-D** exits.
 - **Resilient**: a bad command, a Typer exit or an unexpected exception is printed and the loop continues.
-- **Fast**: the catalog is parsed once per session (see [Performance](#performance)); edits to catalog files are picked up automatically.
-- The legal banner, scope prompt, confirmation and audit logging apply to `run` inside the shell exactly as outside it.
+- **Fast**: the catalog is parsed once per session (see [Performance](#performance)) and edits to catalog files are picked up automatically. The installed count and the install status shown in completions are computed **once at startup** with a single `PATH` lookup per tool, never on each keystroke. If you install a tool mid-session, restart the shell (or run `detect`) to refresh them.
+- The legal banner, scope prompt, confirmation and audit logging apply to `run` inside the shell exactly as outside it. Read-only commands (`list`, `info`, `search`, `detect`, `history`, `help`, the bare-tool shortcut) write no audit line; an unknown command or malformed line is audited as `bad_input`.
 
 ## How `info` works
 

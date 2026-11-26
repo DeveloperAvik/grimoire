@@ -360,7 +360,7 @@ def test_shell_session_sets_flag_and_prints_hint(monkeypatch, tmp_path, capsys):
         def __init__(self, **kw):
             pass
 
-        def prompt(self, text):
+        def prompt(self, *args, **kwargs):
             seen.append(cli._IN_SHELL)  # the flag is on while the loop runs
             return next(lines)
 
