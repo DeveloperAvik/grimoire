@@ -113,3 +113,16 @@ def test_history_file_name_and_location(tmp_path):
     path = engagement.history_path()
     assert path.name == "shell_history"
     assert path.parent == tmp_path / "home"
+
+
+def test_shell_parses_catalog_once_not_per_command(cmd, monkeypatch):
+    from grimoire import catalog
+
+    calls = []
+    real = catalog._read_yaml
+    monkeypatch.setattr(catalog, "_read_yaml", lambda p: (calls.append(p.name), real(p))[1])
+    for line in ("list", "info nmap", "search whois", "info whois", "list -c web", "search zzzz"):
+        cli.dispatch_line(cmd, line)
+    cli._build_completer()  # what `shell` does on startup
+    n_files = len(list(catalog.default_catalog_dir().glob("*.yaml")))
+    assert len(calls) == n_files  # every file parsed exactly once across all of the above

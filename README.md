@@ -23,7 +23,7 @@ grimoire --help
 | `detect` | Which cataloged tools are installed, with best-effort versions, plus an `N/M installed` summary. | `grimoire detect` |
 | `shell` | REPL with fuzzy autocomplete over commands and tool names, persistent history. `help`, `clear`, `exit`/`quit` are built in; Ctrl-C cancels the line, Ctrl-D exits. | `grimoire shell` |
 
-Categories follow Kali's tool groups, listed in rough kill-chain order: `information-gathering`, `vulnerability-analysis`, `web`, `database`, `password-attacks`, `wireless`, `reverse-engineering`, `exploitation`, `sniffing-spoofing`, `post-exploitation`, `forensics`, `social-engineering`, `c2`, `reporting`.
+Categories are Kali's `kali-tools-<suffix>` names (`information-gathering`, `web`, `passwords`, `802-11`, `sdr`, `forensics`, `reporting`, ...), shown in rough kill-chain order. Any category name is accepted (lowercase words joined by hyphens), so a category Kali adds later works without code changes; unfamiliar ones are listed after the known ones, alphabetically. Tools that sit under no `kali-tools-*` metapackage land in `uncategorized`.
 
 ### The `info` usage engine
 
@@ -81,7 +81,7 @@ Entries are validated on load; duplicate names are rejected. Set `GRIMOIRE_CATAL
 The catalog has two tiers:
 
 - `catalog/*.yaml` - **curated**: hand-written, with examples and common flags. These always win.
-- `catalog/generated/*.yaml` - **generated** metadata from Kali's `kali-tools-*` metapackages (name, description, binary, category, install command, homepage). They have no examples or flags; `info` falls back to `tldr`, then `man`, then `--help`. If a generated entry shares a name with a curated one it is skipped. Duplicate names inside a single tier are an error.
+- `catalog/generated/*.yaml` - **generated** metadata covering the whole `kali-linux-everything` tool set (name, description, binary, category, install command, homepage). They have no examples or flags; `info` falls back to `tldr`, then `man`, then `--help`. If a generated entry shares a name with a curated one it is skipped. Duplicate names inside a single tier are an error.
 
 Regenerate on a Kali machine (needs `apt-cache`, `dpkg` and PyYAML; not a runtime dependency):
 
@@ -89,9 +89,15 @@ Regenerate on a Kali machine (needs `apt-cache`, `dpkg` and PyYAML; not a runtim
 python3 scripts/ingest_kali.py        # rewrites catalog/generated/ only; curated files are never touched
 ```
 
-The script is metadata only. It never produces examples or attack commands. Frameworks and everything in `c2` are marked `interactive`, and categories that act on targets are marked `requires_auth_scope`; when unsure it defaults to requiring scope. Review the generated YAML before committing it.
+The script is metadata only. It never produces examples or attack commands. Discovery is dynamic. Starting at `kali-linux-everything`, metapackages (`kali-linux-*` and `kali-tools-*`) are expanded to a closure, with a visited set so dependency cycles terminate; a `kali-tools-*` nested several metapackage levels deep is still found. Each `kali-tools-<suffix>` becomes category `<suffix>`, and its direct Depends and Recommends become tools. Tools are expanded exactly one level from each `kali-tools-*` and never via apt's transitive `--recurse`, so shared libraries don't flood the catalog. Tools listed only by a `kali-linux-*` metapackage go to `uncategorized`. Base-system metapackages (`kali-linux-core`, `kali-linux-firmware`) and the cross-cutting `kali-tools-top10` list are not expanded. A package in several categories keeps the first by display order. If `kali-linux-everything` can't be read (not Kali, metapackage absent) it warns loudly and falls back to an enumerated `kali-tools-*` list; metapackages it can't read are warned about and skipped.
+
+Frameworks and everything in `c2` are marked `interactive`. `requires_auth_scope` defaults to true; it is false only for local/defensive/analysis categories (`reverse-engineering`, `forensics`, `reporting`, `crypto-stego`, `hardware`, `windows-resources`, `detect`, `identify`, `protect`, `respond`, `recover`) and a short passive-recon allowlist. Review the generated YAML before committing it.
 
 Exploitation, post-exploitation and c2 entries follow the same rules as everything else: documentation plus launcher entries, subject to the same scope gating and audit logging.
+
+## Performance
+
+Catalog YAML is parsed with libyaml's `CSafeLoader` when PyYAML provides it (about 8x faster than the pure-Python loader), and the parsed catalog is memoized per directory. The cache is invalidated when any catalog file is added, removed or modified, so a long-lived `grimoire shell` parses once but still picks up edits. At 5,000 entries a cold load takes roughly 150 ms and a cached call well under a millisecond.
 
 ## Development
 

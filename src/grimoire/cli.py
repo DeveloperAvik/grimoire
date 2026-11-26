@@ -16,7 +16,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from . import catalog, engagement
-from .models import Phase, Tool
+from .models import KNOWN_CATEGORY_ORDER, Tool
 
 app = typer.Typer(
     name="grimoire",
@@ -100,16 +100,21 @@ def _version(tool: Tool) -> str:
 # --------------------------------------------------------------------------
 @app.command("list")
 def list_tools(
-    category: Optional[Phase] = typer.Option(None, "--category", "-c", help="Only show this phase."),
+    category: Optional[str] = typer.Option(None, "--category", "-c", help="Only show this category."),
 ) -> None:
     """List cataloged tools grouped by kill-chain phase."""
     tools = _load()
     groups = catalog.by_phase(tools, category)
     if not groups:
+        wanted = category.strip().lower() if category else ""
+        known = {t.category for t in tools.values()} | set(KNOWN_CATEGORY_ORDER)
+        if wanted not in known:
+            console.print(f"[red]Unknown category[/] {escape(repr(category))}. Known: {', '.join(sorted(known))}")
+            raise typer.Exit(1)
         console.print("[yellow]No tools in that category.[/]")
         return
     for phase, members in groups.items():
-        table = Table(title=phase.value, title_justify="left", expand=False)
+        table = Table(title=phase, title_justify="left", expand=False)
         table.add_column("Tool", style="bold cyan", no_wrap=True)
         table.add_column("Installed", justify="center")
         table.add_column("Description")
@@ -128,10 +133,10 @@ def search(query: str = typer.Argument(..., help="Keyword to match against names
         raise typer.Exit(1)
     table = Table()
     table.add_column("Tool", style="bold cyan", no_wrap=True)
-    table.add_column("Phase")
+    table.add_column("Category")
     table.add_column("Description")
     for t in results:
-        table.add_row(_name(t), t.category.value, t.description)
+        table.add_row(_name(t), t.category, t.description)
     console.print(table)
 
 
@@ -151,7 +156,7 @@ def info(tool_name: str = typer.Argument(..., help="Tool name (typos are fuzzy-m
     installed = _installed(tool)
     head = [
         f"[bold]{tool.description}[/]",
-        f"Phase: {tool.category.value}    Binary: {tool.binary}",
+        f"Category: {tool.category}    Binary: {tool.binary}",
         f"Installed: {'[green]yes[/]' if installed else '[red]no[/]'}",
     ]
     if not installed and tool.install:

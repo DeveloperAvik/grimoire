@@ -2,31 +2,55 @@
 
 from __future__ import annotations
 
-from enum import Enum
+import re
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+# Display order, roughly kill-chain. Categories are open strings (Kali's
+# kali-tools-<suffix> names); ones not listed here sort after these, alphabetically.
+KNOWN_CATEGORY_ORDER = [
+    "information-gathering",
+    "vulnerability",
+    "web",
+    "database",
+    "passwords",
+    "wireless",
+    "802-11",
+    "bluetooth",
+    "rfid",
+    "sdr",
+    "voip",
+    "fuzzing",
+    "exploitation",
+    "sniffing-spoofing",
+    "post-exploitation",
+    "c2",
+    "social-engineering",
+    "reverse-engineering",
+    "crypto-stego",
+    "forensics",
+    "hardware",
+    "android",
+    "windows-resources",
+    "detect",
+    "identify",
+    "protect",
+    "respond",
+    "recover",
+    "reporting",
+    "uncategorized",
+]
+
+# Safe for filenames and CLI flags: lowercase words joined by single hyphens.
+CATEGORY_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
-class Phase(str, Enum):
-    """Kali's tool categories, in rough kill-chain display order."""
-
-    INFORMATION_GATHERING = "information-gathering"
-    VULNERABILITY_ANALYSIS = "vulnerability-analysis"
-    WEB = "web"
-    DATABASE = "database"
-    PASSWORD_ATTACKS = "password-attacks"
-    WIRELESS = "wireless"
-    REVERSE_ENGINEERING = "reverse-engineering"
-    EXPLOITATION = "exploitation"
-    SNIFFING_SPOOFING = "sniffing-spoofing"
-    POST_EXPLOITATION = "post-exploitation"
-    FORENSICS = "forensics"
-    SOCIAL_ENGINEERING = "social-engineering"
-    C2 = "c2"
-    REPORTING = "reporting"
-
-
-PHASE_ORDER = list(Phase)
+def category_sort_key(category: str) -> tuple[int, str]:
+    """Known categories in KNOWN_CATEGORY_ORDER, then unknown ones alphabetically."""
+    try:
+        return (KNOWN_CATEGORY_ORDER.index(category), category)
+    except ValueError:
+        return (len(KNOWN_CATEGORY_ORDER), category)
 
 
 class Example(BaseModel):
@@ -36,7 +60,7 @@ class Example(BaseModel):
 
 class Tool(BaseModel):
     name: str
-    category: Phase
+    category: str
     binary: str
     install: str = ""
     description: str
@@ -46,3 +70,11 @@ class Tool(BaseModel):
     interactive: bool = False
     requires_auth_scope: bool = False
     source: str = "curated"  # "generated" for entries produced by scripts/ingest_kali.py
+
+    @field_validator("category")
+    @classmethod
+    def _valid_category(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not CATEGORY_RE.match(value):
+            raise ValueError(f"invalid category {value!r}: use lowercase words joined by hyphens")
+        return value
