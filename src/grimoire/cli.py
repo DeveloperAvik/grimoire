@@ -532,9 +532,33 @@ def dispatch_line(cmd: Any, line: str) -> bool:
     return True
 
 
+def _usage_completions(tool: Tool) -> list[tuple[str, str, str]]:
+    """(completion, display, meta) triples drawn only from the tool's catalog entry."""
+    out: list[tuple[str, str, str]] = []
+    for flag, meaning in tool.common_flags.items():
+        parts = flag.split()
+        out.append((parts[0] if parts else flag, flag, meaning))
+    leads = {tool.binary.lower(), tool.name.lower()}
+    for ex in tool.examples:
+        parts = ex.cmd.split(None, 1)
+        if parts and parts[0].lower() in leads:
+            args = parts[1] if len(parts) > 1 else ""
+        else:
+            args = ex.cmd
+        if args:
+            out.append((args, args, ex.desc))
+    return out
+
+
 def _build_completer(tools: dict[str, Tool] | None = None, status: dict[str, bool] | None = None):
-    """Fuzzy completer. Tool names carry `<category> · installed|missing`; `list -c` completes categories."""
-    from prompt_toolkit.completion import FuzzyCompleter, NestedCompleter, WordCompleter
+    """Fuzzy, tool-aware completer. UI only: it never affects dispatch, audit or run.
+
+    - first word: command names and tool names
+    - `info`/`run <partial>`: tool names (`<category> · installed|missing`)
+    - `list -c <partial>`: categories
+    - `run <tool> ...` and bare `<tool> ...`: that tool's catalog flags and examples
+    """
+    from prompt_toolkit.completion import Completer, Completion, FuzzyCompleter
 
     from .models import category_sort_key
 
@@ -544,29 +568,43 @@ def _build_completer(tools: dict[str, Tool] | None = None, status: dict[str, boo
         t.name: f"{t.category} · {'installed' if status.get(key) else 'missing'}"
         for key, t in tools.items()
     }
-    names = WordCompleter(sorted(meta), meta_dict=meta, ignore_case=True)
-
     counts: dict[str, int] = {}
     for t in tools.values():
         counts[t.category] = counts.get(t.category, 0) + 1
     cats = sorted(set(KNOWN_CATEGORY_ORDER) | set(counts), key=category_sort_key)
     cat_meta = {c: f"{counts.get(c, 0)} tools" for c in cats}
-    categories = WordCompleter(cats, meta_dict=cat_meta, ignore_case=True)
+    commands = ["info", "run", "list", "search", "detect", "update", "history", "help", "clear", "exit", "quit"]
+    name_items = [(n, n, m) for n, m in sorted(meta.items())]
 
-    tree = {
-        "info": names,
-        "run": names,
-        "list": {"-c": categories, "--category": categories},
-        "search": None,
-        "detect": None,
-        "update": None,
-        "history": None,
-        "help": None,
-        "clear": None,
-        "exit": None,
-        "quit": None,
-    }
-    return FuzzyCompleter(NestedCompleter.from_nested_dict(tree))
+    class GrimoireCompleter(Completer):
+        def get_completions(self, document, complete_event):
+            text = document.text_before_cursor
+            done = text.split()
+            current = "" if (not text or text[-1].isspace()) else done.pop()
+
+            def emit(items):
+                for value, display, meta_text in items:
+                    if value.lower().startswith(current.lower()):
+                        yield Completion(value, start_position=-len(current), display=display, display_meta=meta_text)
+
+            if not done:  # still typing the first word
+                yield from emit([(c, c, "") for c in commands] + name_items)
+                return
+            first = done[0].lower()
+            if first in ("info", "run"):
+                if len(done) == 1:
+                    yield from emit(name_items)
+                elif first == "run" and (tool := tools.get(done[1].lower())):
+                    yield from emit(_usage_completions(tool))
+            elif first == "list":
+                if done[-1] in ("-c", "--category"):
+                    yield from emit([(c, c, cat_meta[c]) for c in cats])
+                elif len(done) == 1:
+                    yield from emit([("-c", "-c", "filter by category"), ("--category", "--category", "filter by category")])
+            elif first not in commands and (tool := tools.get(first)):
+                yield from emit(_usage_completions(tool))
+
+    return FuzzyCompleter(GrimoireCompleter(), WORD=True)
 
 
 def _build_key_bindings():

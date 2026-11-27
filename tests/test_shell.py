@@ -406,3 +406,78 @@ def test_keyboard_interrupt_and_eof_behaviour_kept(monkeypatch):
 
     monkeypatch.setattr(prompt_toolkit, "PromptSession", Eof)
     cli.shell()  # Ctrl-D exits cleanly
+
+
+# ---- tool-aware completion -------------------------------------------------------------
+from grimoire.models import Example  # noqa: E402
+
+
+def usage_tools():
+    return {
+        "nmap": Tool(
+            name="nmap", category="information-gathering", binary="nmap", description="d",
+            common_flags={"-sV": "Probe service versions", "-sC": "Default scripts", "-oA <base>": "Save all formats"},
+            examples=[
+                Example(cmd="nmap -sV -sC 192.0.2.10", desc="Service scan"),
+                Example(cmd="nmap -p- 192.0.2.10", desc="Full port sweep"),
+            ],
+        ),
+        "gen": Tool(name="gen", category="web", binary="gen", description="d", source="generated"),
+    }
+
+
+def usage_completer():
+    return cli._build_completer(usage_tools(), {})
+
+
+def metas(text):
+    return {x.text: x.display_meta_text for x in completions(usage_completer(), text)}
+
+
+def test_run_tool_partial_flag_offers_matching_flags_with_meaning():
+    got = metas("run nmap -s")
+    assert got["-sV"] == "Probe service versions" and got["-sC"] == "Default scripts"
+    assert "-oA" not in got
+
+
+def test_run_tool_space_offers_examples_and_flags():
+    got = metas("run nmap ")
+    assert got["-sV -sC 192.0.2.10"] == "Service scan"  # binary stripped, meta = desc
+    assert got["-p- 192.0.2.10"] == "Full port sweep"
+    assert got["-sV"] == "Probe service versions"
+    assert "-oA" in got  # placeholder dropped from the inserted text
+    shown = {x.display_text for x in completions(usage_completer(), "run nmap ")}
+    assert "-oA <base>" in shown
+
+
+def test_bare_tool_offers_flags():
+    got = metas("nmap -")
+    assert got["-sV"] == "Probe service versions"
+    assert "nmap" not in got
+
+
+def test_info_offers_names_not_flags():
+    got = metas("info ")
+    assert set(got) == {"nmap", "gen"}
+    assert "-sV" not in metas("info nmap ")  # info takes only a tool name
+
+
+def test_list_dash_c_offers_categories():
+    got = metas("list -c ")
+    assert "web" in got and "information-gathering" in got
+
+
+def test_run_generated_tool_offers_nothing_extra():
+    assert completions(usage_completer(), "run gen ") == []
+    assert completions(usage_completer(), "gen -") == []
+    assert completions(usage_completer(), "run nosuchtool ") == []
+
+
+def test_first_word_offers_commands_and_tools():
+    got = metas("")
+    assert {"run", "info", "nmap", "gen"} <= set(got)
+
+
+def test_completion_does_not_touch_dispatch_or_audit(tmp_path):
+    usage_completer()
+    assert not (tmp_path / "audit.jsonl").exists()
